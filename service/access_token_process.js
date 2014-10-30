@@ -3,50 +3,59 @@
  */
 
 
-var wx_url = require("../config/wx_request_url.js")
-var wx_secrect = require("../config/wx_secrect.js")
-var https_client = require("../util/https_client.js")
-var file_util = require("../util/file_util.js")
+var wx_url = require('../config/wx_request_url.js')
+var wx_secrect = require('../config/wx_secrect.js')
+var file_util = require('../util/file_util.js')
+var needle = require('needle');
 
-var access_token_file = "../config/access_token";
+var access_token_file = '../config/access_token';
 
 function get_token(callback) {
 
-    file_util.read(access_token_file, function (err,data) {
+    file_util.read(access_token_file, function (err, data) {
         if (err) {
             refresh_token(function (data) {
-                callback(data);
+                callback(JSON.parse(data).access_token);
             })
         } else {
-            if (data.isEmpty || data == "") {
+            if (data.isEmpty || data == '') {
                 refresh_token(function (data) {
-                    callback(data);
+                    callback(JSON.parse(data).access_token);
                 })
             } else {
-                callback(data);
+                callback(JSON.parse(data).access_token);
             }
         }
     })
+
+    //每2小时刷新Token
+    var CronJob = require('cron').CronJob;
+    new CronJob('* * */2 * * *', function(){
+        refresh_token(function (data) {
+            callback(JSON.parse(data).access_token);
+        })
+    }, null, true);
+
 }
 
 
 function refresh_token(callback) {
 
-    https_client.get(get_access_token_url(), function (data) {
-        file_util.write(access_token_file, data);
-        callback(data);
-    })
+    needle.get(get_access_token_url(),{encoding:'utf-8'}, function (err,resp) {
+        file_util.write(access_token_file, resp.body);
+        callback(resp.body);
+    },'utf-8')
 }
-
+refresh_token(function(data){
+    console.log(data)
+})
 
 function get_access_token_url() {
     var access_token_url = wx_url.access_token_url;
-    access_token_url = access_token_url.replace("APPID", wx_secrect.app_id);
-    access_token_url = access_token_url.replace("APPSECRET", wx_secrect.app_secret);
+    access_token_url = access_token_url.replace('APPID', wx_secrect.app_id);
+    access_token_url = access_token_url.replace('APPSECRET', wx_secrect.app_secret);
     return access_token_url;
 }
 
-
-get_token(function(data){
-    console.log(data)
-})
+exports.get_token = get_token
+exports.refresh_token = refresh_token
